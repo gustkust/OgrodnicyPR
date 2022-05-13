@@ -42,9 +42,9 @@ int main(int argc, char **argv)
     int cs_size_req = 0;
 
     int ok_got = 0;
-    int got_no = 0;
+    // int got_no = 0;
 
-    int im_first;
+    int first;
 
     void *listening(void *arg)
     {
@@ -66,7 +66,7 @@ int main(int argc, char **argv)
 
                     req_queue[status.MPI_SOURCE - 1] = res;
 
-                    printf("Jestem %d 1, dostalem req od %d, wysylam mu swoj timestamp -> %d\n", rank, status.MPI_SOURCE, timestamp);
+                    printf("Jestem %d 1, dostalem req od %d, wysylam mu swoj timestamp -> timestamp = %d, ok_got = %d, req_queue = %d %d %d\n", rank, status.MPI_SOURCE, timestamp, ok_got, req_queue[0], req_queue[1], req_queue[2]);
                 }
                 else if (status.MPI_TAG == rel)
                 {
@@ -77,9 +77,8 @@ int main(int argc, char **argv)
                     }
 
                     req_queue[status.MPI_SOURCE - 1] = -1;
-                    cs_size--;
 
-                    printf("Jestem %d 1, dostalem rel od %d -> %d\n", rank, status.MPI_SOURCE, timestamp);
+                    printf("Jestem %d 1, dostalem rel od %d -> timestamp = %d, ok_got = %d, req_queue = %d %d %d\n", rank, status.MPI_SOURCE, timestamp, ok_got, req_queue[0], req_queue[1], req_queue[2]);
                 }
                 else if (status.MPI_TAG = req_answer)
                 {
@@ -91,7 +90,7 @@ int main(int argc, char **argv)
                         {
                             timestamp = res;
                         }
-                        printf("Jestem %d 1, dostalem req_answer od %d, zwiekszam ok_got do %d -> %d\n", rank, status.MPI_SOURCE, ok_got, timestamp);
+                        printf("Jestem %d 1, dostalem req_answer od %d, zwiekszam ok_got -> timestamp = %d, ok_got = %d, req_queue = %d %d %d\n", rank, status.MPI_SOURCE, timestamp, ok_got, req_queue[0], req_queue[1], req_queue[2]);
                     }
                     else
                     {
@@ -99,15 +98,15 @@ int main(int argc, char **argv)
                         {
                             timestamp = res;
                         }
-                        got_no = 1;
-                        printf("Jestem %d 1, dostalem req_answer od %d, ustawiam got_no -> %d\n", rank, status.MPI_SOURCE, timestamp);
+                        // got_no = 1;
+                        // printf("Jestem %d 1, dostalem req_answer od %d, ustawiam got_no -> timestamp = %d, ok_got = %d, req_queue = %d %d %d\n", rank, status.MPI_SOURCE, timestamp, ok_got, req_queue[0], req_queue[1], req_queue[2]);
                     }
                 }
             }
             else
             {
-                printf("Jestem %d 1, zwiększam sobie rozmiar ścieżki krytycznej -> %d\n", rank, timestamp);
                 cs_size++;
+                printf("Jestem %d 1, zwiększam sobie rozmiar ścieżki krytycznej do %d, ok_got = %d -> timestamp = %d, ok_got = %d, req_queue = %d %d %d\n", rank, cs_size, ok_got, timestamp, ok_got, req_queue[0], req_queue[1], req_queue[2]);
             }
         }
     }
@@ -115,10 +114,11 @@ int main(int argc, char **argv)
     if (rank == ROOT)
     {
         sleep(1);
-        int time_sleep = 120;
         int order_id;
+        int time_sleep;
         while (1)
         {
+            time_sleep = (rand() % (60 - 10 + 1)) + 10;
             printf("Jestem instytut i wysyłam do wszystkich ogrodników info, że jest nowe zlecenie!\n");
             order_id = (rand() % (10000 - 5000 + 1)) + 5000; // id zlecen miedzy 5000, a 10000, by latwo rozroznic z timestampami
             for (i = 1; i < size; i++)
@@ -138,47 +138,56 @@ int main(int argc, char **argv)
         pthread_create(&thread_id, NULL, listening, NULL);
         while (1)
         {
-            ok_got = 0;
-            timestamp++;
-            req_queue[rank - 1] = timestamp;
-            cs_size_req = cs_size;
-            printf("Jestem %d 2, wysyłam req do pozostalych procesow -> %d\n", rank, req_queue[rank - 1]);
-            for (i = 1; i < size; i++)
+            if (req_queue[rank - 1] == -1)
             {
-                MPI_Send(&req_queue[rank - 1], 1, MPI_INT, i, req, MPI_COMM_WORLD); // pytam o ok
+                ok_got = 0;
+                timestamp++;
+                req_queue[rank - 1] = timestamp;
+                cs_size_req = cs_size;
+                printf("Jestem %d 2, wysyłam req do pozostalych procesow -> timestamp = %d, ok_got = %d, req_queue = %d %d %d\n", rank, timestamp, ok_got, req_queue[0], req_queue[1], req_queue[2]);
+                for (i = 1; i < size; i++)
+                {
+                    if (i != rank)
+                    {
+                        MPI_Send(&req_queue[rank - 1], 1, MPI_INT, i, req, MPI_COMM_WORLD); // pytam o ok
+                    }
+                }
             }
             while (1)
             {
-                if (got_no == 1)
-                {
-                    printf("Jestem %d 2, otrzymałem NO -> %d\n", rank, timestamp);
-                    ok_got = 0;
-                    got_no = 0;
-                    break;
-                }
+                // if (got_no == 1)
+                // {
+                //     printf("Jestem %d 2, otrzymałem NO -> %d\n", rank, timestamp);
+                //     ok_got = 0;
+                //     got_no = 0;
+                //     break;
+                // }
                 if (ok_got == size - 1 - cs_size)
                 {
-                    printf("Jestem %d 2, otrzymałem odpowiednia ilosc ok, sprawdzam czy jestem pierwszy -> %d\n", rank, timestamp);
-                    im_first = 1;
+                    printf("Jestem %d 2, otrzymałem odpowiednia ilosc ok, sprawdzam czy jestem pierwszy -> timestamp = %d, ok_got = %d, req_queue = %d %d %d\n", rank, timestamp, ok_got, req_queue[0], req_queue[1], req_queue[2]);
+                    first = -1;
                     for (int i = 0; i < size - 1; i++)
                     {
-                        if (i != rank && req_queue[i] != -1)
+                        if (first == -1 && req_queue[i] != -1) {
+                            first = i;
+                        }
+                        else if (req_queue[i] != -1 && req_queue[i] < req_queue[first])
                         {
-                            if ((req_queue[i] < req_queue[rank - 1]) || ((req_queue[i] == req_queue[rank - 1] && i < rank - 1)))
-                            {
-                                im_first = 0;
-                            }
+                            first = i;
                         }
                     }
-                    if (im_first)
+                    // printf("\n%d %d\n\n", rank, first);
+                    if (first == rank - 1)
                     {
-                        printf("Jestem %d 2, jestem pierwszy, wchodze do sekcji -> %d\n", rank, timestamp);
-                        for (i = 5; i > 0; i--)
+                        printf("\nJestem %d 2, jestem pierwszy, wchodze do sekcji -> timestamp = %d, ok_got = %d, req_queue = %d %d %d\n\n", rank, timestamp, ok_got, req_queue[0], req_queue[1], req_queue[2]);
+                        int tmp = (rand() % (30 - 10 + 1)) + 10;
+                        for (i = 25; i > 0; i--)
                         {
-                            printf("Jestem %d 2, jestem w sekcji krytycznej przez jeszcze: %d -> %d\n", rank, i, timestamp);
+                            printf("Jestem %d 2, jestem w sekcji krytycznej przez jeszcze: %d -> timestamp = %d, ok_got = %d, req_queue = %d %d %d\n", rank, i, timestamp, ok_got, req_queue[0], req_queue[1], req_queue[2]);
                             sleep(1);
                         }
-                        printf("Jestem %d 2, wychodzę z sekcji krytycznej -> %d\n", rank, timestamp);
+                        printf("\nJestem %d 2, wychodzę z sekcji krytycznej -> timestamp = %d, ok_got = %d, req_queue = %d %d %d\n\n", rank, timestamp, ok_got, req_queue[0], req_queue[1], req_queue[2]);
+                        
                         for (i = 1; i < size; i++)
                         {
                             if (i != rank)
@@ -188,12 +197,15 @@ int main(int argc, char **argv)
                         }
                         cs_size--;
                         ok_got = 0;
+                        req_queue[rank - 1] = -1;
                         break;
                     }
                     else
                     {
-                        printf("Jestem %d 2, nie jestem pierwszy, abort -> %d\n", rank, timestamp);
-                        req_queue[rank - 1] = -1;
+                        req_queue[first] = -1; // wchodzi first
+                        printf("Jestem %d 2, nie jestem pierwszy, abort -> timestamp = %d, ok_got = %d, req_queue = %d %d %d\n", rank, timestamp, ok_got, req_queue[0], req_queue[1], req_queue[2]);
+                        // req_queue[rank - 1] = -1;
+                        cs_size--;
                         break;
                     }
                 }
